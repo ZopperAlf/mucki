@@ -1,0 +1,1518 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Mini Shetland Pony Rennspiel</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    body {
+      background-color: #1a1a2e;
+      color: #fff;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    #game-container {
+      position: relative;
+      width: 360px;
+      height: 640px;
+      background: linear-gradient(to bottom, #87CEEB 0%, #E0F6FF 60%, #90EE90 60%, #32CD32 100%);
+      border: 4px solid #4a3525;
+      border-radius: 16px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      overflow: hidden;
+      touch-action: none;
+    }
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .hud {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      right: 12px;
+      display: flex;
+      justify-content: space-between;
+      font-weight: bold;
+      font-size: 16px;
+      color: #2d1a0e;
+      text-shadow: 1px 1px 0px rgba(255,255,255,0.8);
+      pointer-events: none;
+    }
+    .hud-box {
+      background: rgba(255, 255, 255, 0.7);
+      padding: 6px 12px;
+      border-radius: 20px;
+      border: 1px solid #2d1a0e;
+    }
+    .controls {
+      position: absolute;
+      bottom: 14px;
+      left: 12px;
+      right: 12px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+    .btn {
+      background: #8B4513;
+      color: #FFF;
+      border: 2px solid #5c2e0b;
+      border-radius: 12px;
+      padding: 16px 0;
+      font-weight: bold;
+      font-size: 13px;
+      text-align: center;
+      cursor: pointer;
+      box-shadow: 0 5px 0 #5c2e0b;
+      transition: all 0.05s ease;
+    }
+    .btn:active {
+      transform: translateY(4px);
+      box-shadow: 0 0 0 #5c2e0b;
+    }
+    #overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.75);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 20px;
+    }
+    #overlay h1 {
+      color: #FFD700;
+      margin-bottom: 10px;
+      font-size: 26px;
+    }
+    #muckiFace {
+      margin-bottom: 8px;
+      filter: drop-shadow(0 6px 10px rgba(0,0,0,0.5));
+    }
+    #overlay p {
+      margin-bottom: 20px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .start-btn {
+      background: #4CAF50;
+      color: white;
+      border: none;
+      padding: 12px 28px;
+      font-size: 18px;
+      font-weight: bold;
+      border-radius: 25px;
+      cursor: pointer;
+      box-shadow: 0 4px 0 #2E7D32;
+    }
+    .start-btn:active {
+      transform: translateY(4px);
+      box-shadow: 0 0 0 #2E7D32;
+    }
+  </style>
+</head>
+<body>
+
+<div id="game-container">
+  <canvas id="gameCanvas" width="360" height="400"></canvas>
+
+  <div class="hud">
+    <div class="hud-box">Distanz: <span id="distVal">0</span>m</div>
+    <div class="hud-box">Punkte: <span id="scoreVal">0</span></div>
+    <div class="hud-box" id="livesBox">❤️ 1</div>
+    <div class="hud-box" id="aggroBox" style="display:none">🥕 <span id="carrotVal">0</span>/5</div>
+  </div>
+
+  <div class="controls">
+    <div class="btn" id="btnJump">Springen</div>
+    <div class="btn" id="btnDuck">Ducken</div>
+    <div class="btn" id="btnAcc">Tempo +</div>
+    <div class="btn" id="btnBrake">Bremsen</div>
+  </div>
+
+  <div id="overlay">
+    <canvas id="muckiFace" width="220" height="170"></canvas>
+    <h1 id="overlayTitle">Muckis Reise</h1>
+    <p id="overlayDesc">
+      Mucki, das mini-shetländische Stress-Pony, rast los!<br>
+      Achtung: Er beißt und tritt aus! 🦷🦵<br><br>
+      ⬆️ Springen | ⬇️ Ducken<br>
+      ➡️ Tempo + (kurz!) | ⬅️ Bremsen (kurz!)<br>
+      🍎×3 = Extra-Leben | 🥕×5 = AGGRO-Modus!<br><br>
+      Weiche Hürden, Stangen & Bienen aus!
+    </p>
+    <button class="start-btn" id="startBtn">Los, Mucki!</button>
+  </div>
+</div>
+
+<script>
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+
+  const distVal = document.getElementById('distVal');
+  const scoreVal = document.getElementById('scoreVal');
+  const livesBox = document.getElementById('livesBox');
+  const aggroBox = document.getElementById('aggroBox');
+  const carrotVal = document.getElementById('carrotVal');
+  const overlay = document.getElementById('overlay');
+  const overlayTitle = document.getElementById('overlayTitle');
+  const overlayDesc = document.getElementById('overlayDesc');
+  const startBtn = document.getElementById('startBtn');
+
+  // Spiel-Zustand
+  let isRunning = false;
+  let score = 0;
+  let lives = 1;
+  let apples = 0;
+  let carrots = 0;
+  let aggroTimer = 0;   // Aggro-Modus: unverwundbar, rennt alles um
+  let aggroFlash = 0;   // kurzer Effekt beim Aktivieren
+  let distance = 0;
+  let speed = 4;
+  const baseGroundY = 240;
+
+  // Mini Shetland Pony Objekt (kleiner, stämmiger gebaut)
+  const pony = {
+    x: 50,
+    y: baseGroundY,
+    width: 42,
+    height: 32, // Extra klein für ein Mini-Shetlandpony
+    velocityY: 0,
+    gravity: 0.6,
+    isJumping: false,
+    isDucking: false,
+    duckTimer: 0
+  };
+
+  let obstacles = [];
+  let collectibles = [];
+  let spawnTimer = 0;
+  let runFrame = 0;
+
+  // Fester 60-FPS-Takt (unabhängig von Monitor-Bildwiederholrate)
+  let lastFrameTime = 0;
+  let frameAccum = 0;
+  const FRAME_MS = 1000 / 60;
+
+  // Kurzer Sprint / kurzes Bremsen
+  let boostTimer = 0;
+  let brakeTimer = 0;
+
+  // Sprüche: 3 zufällige pro 1000 m
+  const muckiQuotes = [
+    'Ich BIN kurz durchgedreht! 😤',
+    'Hab ich eben ein Hindernis gebissen? Vielleicht. 🦷',
+    'Wer mich stört, wird getreten! 🦵',
+    'Ich bin klein, aber ich bin AUSGEBRANNT! 🔥',
+    'Apfel her, oder ich beiße! 🍎🦷',
+    'Trab? Ich mache TURBO-STRESS! 💨',
+    'Nicht anfassen! AUSSERDEM: nichts anfassen! 🙅',
+    'Mein Schweif wedelt VOR lauter Aufregung! 🌀',
+    'Karotte oder Tritte, deine Wahl! 🥕🦵',
+    'Ich bin kein Pony, ich bin ein Miniatur-Blitz! ⚡',
+    'Entspannung ist was für Kuh-Ponys! 😡',
+    'Hindernis? Ich SPRING es WÜTEND! 😠',
+    'Stress ist mein Sport! 🏃',
+    'Zurückbleiben, ihr lahmen Weiden! 🌾',
+    'Gebt mir einen Sattel und ich beiße den Sattel! 🐴',
+    'Ich hab gehört, Ponys seien friedlich. FALSCH. 🦷',
+    'Mein Huf hat einen Namen: SCHMERZ! 🦵',
+    'Langeweile? Die BEISSE ich einfach weg! 😬',
+    'Ich renne, weil ich Entscheidungen hasse! 🏇',
+    'Euer Hirtnhund hat Angst vor MIR! 🐕',
+    'Ich bin wütend, weil ich so flauschig bin! ☁️',
+    'Die Weide gehört MIR! Alles! Jedes Gras! 🌱',
+    'Ich wiehere nicht, ich SCHREIE! 📢',
+    'Hinter der Hürde wohnt mein ERZFEIND! 😱',
+    'Zu schnell? Zu langsam? Zu MUCKI! 💥',
+    'Ich bin nicht hyperaktiv, ich bin ENTHUSIASTISCH! 🎉',
+    'Wetten dass ich diese Weide umdrehen kann? 🌀',
+    'Punkte sammeln ist RACHEN-TRAINING! 🍎',
+    'Achtung, ich spucke! ...nicht. Aber fast! 😝',
+    'Ich hab 99 Probleme und alle sind ZÄUNE! 🚧'
+  ];
+  let level = 1;
+  let quoteTriggers = [];
+  let quoteTimer = 0;
+  let currentQuote = '';
+  let levelUpPending = false;
+
+  function planQuotes() {
+    quoteTriggers = [];
+    for (let i = 0; i < 3; i++) {
+      quoteTriggers.push((level - 1) * 500 + 40 + Math.random() * 420);
+    }
+    quoteTriggers.sort((a, b) => a - b);
+  }
+
+  let touchStartX = 0;
+  let touchStartY = 0;
+
+  // Keyboard Steuerung
+  window.addEventListener('keydown', (e) => {
+    if (!isRunning) return;
+    if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') triggerJump();
+    if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') triggerDuck();
+    if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') triggerBoost();
+    if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') triggerBrake();
+  });
+
+  function triggerBoost() {
+    boostTimer = 40;   // ~0,7 s Sprint
+    brakeTimer = 0;
+  }
+
+  function triggerBrake() {
+    brakeTimer = 40;   // ~0,7 s Bremsen
+    boostTimer = 0;
+  }
+
+  document.getElementById('btnJump').addEventListener('click', triggerJump);
+  document.getElementById('btnDuck').addEventListener('click', triggerDuck);
+  document.getElementById('btnAcc').addEventListener('click', triggerBoost);
+  document.getElementById('btnBrake').addEventListener('click', triggerBrake);
+
+  // Touch Swipe Event-Handler
+  const container = document.getElementById('game-container');
+  container.addEventListener('touchstart', (e) => {
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+  }, { passive: true });
+
+  container.addEventListener('touchend', (e) => {
+    if (!isRunning) return;
+    let touchEndX = e.changedTouches[0].clientX;
+    let touchEndY = e.changedTouches[0].clientY;
+
+    let dx = touchEndX - touchStartX;
+    let dy = touchEndY - touchStartY;
+
+    if (Math.abs(dx) > Math.abs(dy)) {
+      if (dx > 30) triggerBoost();
+      else if (dx < -30) triggerBrake();
+    } else {
+      if (dy < -30) triggerJump();
+      else if (dy > 30) triggerDuck();
+    }
+  }, { passive: true });
+
+  function triggerJump() {
+    if (!pony.isJumping && !pony.isDucking) {
+      pony.velocityY = -11;
+      pony.isJumping = true;
+    }
+  }
+
+  function triggerDuck() {
+    if (!pony.isJumping) {
+      pony.isDucking = true;
+      pony.duckTimer = 35;
+    }
+  }
+
+  function startGame() {
+    score = 0;
+    distance = 0;
+    speed = 4;
+    lives = 1;
+    apples = 0;
+    carrots = 0;
+    aggroTimer = 0;
+    aggroFlash = 0;
+    livesBox.innerText = '❤️ 1';
+    aggroBox.style.display = 'none';
+    carrotVal.innerText = 0;
+    obstacles = [];
+    collectibles = [];
+    boostTimer = 0;
+    brakeTimer = 0;
+    level = 1;
+    planQuotes();
+    quoteTimer = 0;
+    currentQuote = '';
+    levelUpPending = false;
+    pony.y = baseGroundY;
+    pony.velocityY = 0;
+    pony.isJumping = false;
+    pony.isDucking = false;
+    isRunning = true;
+    overlay.style.display = 'none';
+    lastFrameTime = 0;
+    frameAccum = 0;
+    if (faceAnim) { cancelAnimationFrame(faceAnim); faceAnim = null; }
+    requestAnimationFrame(gameLoop);
+  }
+
+  function gameOver() {
+    isRunning = false;
+    const overQuotes = [
+      'Das war kein Sturz, das war ein ANGRIFF! 🦵',
+      'Wer hat die Hürde da hingestellt?! 🦷',
+      'Ich bin nicht gestürzt, ich RUHE mich AUS! 😤',
+      'Ihr habt mich WAHNSINNIG gemacht! 😡'
+    ];
+    const overQuote = overQuotes[Math.floor(Math.random() * overQuotes.length)];
+    overlayTitle.innerText = 'Hoppla! Game Over';
+    overlayDesc.innerHTML = `Mucki ist ${Math.floor(distance)} Meter gelaufen!<br>Gesamtpunkte: <b>${score}</b><br><br><i>"${overQuote}"</i> — Mucki`;
+    startBtn.innerText = 'Nochmal, Mucki!';
+    overlay.style.display = 'flex';
+    startFaceAnim('angry');
+  }
+
+  function levelUp() {
+    isRunning = false;
+    levelUpPending = true;
+    const qs = [
+      `${level * 500} Meter! Ich bin OFFIZIELL der Größte! 👑`,
+      `Level ${level + 1}?! Ich STRESSE mich NICHT... okay, DOCH! 😤`,
+      'Noch ein Level und ihr bereut ALLES! 🦵',
+      `Kilometer ${level} geschafft – Belohnung: MEHR STRESS! 🔥`,
+      'Ich laufe schneller als euer WLAN! 💨',
+      'Denkt ja nicht, ich wäre jetzt müde! 😤',
+      'Endlich Ruhm! Und Äpfel! Vor allem Äpfel! 🍎'
+    ];
+    overlayTitle.innerText = `Level ${level + 1}! 🎉`;
+    overlayDesc.innerHTML = `Mucki hat ${Math.floor(distance)} Meter überlebt!<br>Level ${level + 1} wartet!<br>Punkte: <b>${score}</b><br><br><i>"${qs[Math.floor(Math.random() * qs.length)]}"</i><br>— Mucki, das Stress-Pony`;
+    startBtn.innerText = 'Weiter gehts, Mucki!';
+    overlay.style.display = 'flex';
+    startFaceAnim('proud');
+  }
+
+  // ==== Lustiger animierter Mucki-Kopf auf den Splash-Screens ====
+  const faceCanvas = document.getElementById('muckiFace');
+  const fctx = faceCanvas.getContext('2d');
+  let faceAnim = null;
+  let faceMood = 'angry'; // 'angry' (Game Over), 'proud' (Level up), 'start' (Start)
+
+  function startFaceAnim(mood) {
+    faceMood = mood;
+    if (faceAnim) cancelAnimationFrame(faceAnim);
+    let t = 0;
+    let blinkAt = 40 + Math.random() * 100;
+
+    function draw() {
+      t++;
+      fctx.clearRect(0, 0, 220, 170);
+      fctx.save();
+      fctx.translate(110, 96);
+      fctx.rotate(Math.sin(t * 0.04) * 0.07);
+
+      // Mähne: cremefarbene Wedel-Tuffs hinter dem Kopf
+      for (let m = 0; m < 9; m++) {
+        const a = -2.95 + m * 0.32;
+        const wob = Math.sin(t * 0.22 + m * 1.4) * 6;
+        fctx.beginPath();
+        fctx.moveTo(Math.cos(a) * 50, Math.sin(a) * 48);
+        fctx.quadraticCurveTo(
+          Math.cos(a) * 84 + wob, Math.sin(a) * 80 + wob,
+          Math.cos(a + 0.22) * 58, Math.sin(a + 0.22) * 56
+        );
+        fctx.lineWidth = 10;
+        fctx.strokeStyle = ['#FFF8DC', '#F0E6C8', '#EDE0BE'][m % 3];
+        fctx.lineCap = 'round';
+        fctx.stroke();
+      }
+
+      // Ohren mit hellem Innenohr
+      const earTwitch = Math.sin(t * 0.3) * 0.12;
+      function ear(sx, dir) {
+        fctx.save();
+        fctx.translate(sx, -50);
+        fctx.rotate(dir * (0.3 + earTwitch));
+        fctx.fillStyle = '#7a3d10';
+        fctx.beginPath();
+        fctx.moveTo(-12, 10);
+        fctx.quadraticCurveTo(-10, -22, 0, -30);
+        fctx.quadraticCurveTo(10, -22, 12, 10);
+        fctx.closePath();
+        fctx.fill();
+        fctx.fillStyle = '#f3ead2';
+        fctx.beginPath();
+        fctx.moveTo(-6, 6);
+        fctx.quadraticCurveTo(-5, -14, 0, -20);
+        fctx.quadraticCurveTo(5, -14, 6, 6);
+        fctx.closePath();
+        fctx.fill();
+        fctx.restore();
+      }
+      ear(-50, -1);
+      ear(50, 1);
+
+      // Kopf: brauner Grund mit weicher Rundung
+      const hg = fctx.createRadialGradient(-14, -30, 8, 0, 0, 78);
+      hg.addColorStop(0, '#a46526');
+      hg.addColorStop(0.75, '#8B4513');
+      hg.addColorStop(1, '#6e3510');
+      fctx.fillStyle = hg;
+      fctx.beginPath();
+      fctx.ellipse(0, 0, 58, 54, 0, 0, Math.PI * 2);
+      fctx.fill();
+
+      // Weiße Blesse mittig + Wangenflecken (Fellzeichnung wie am Foto)
+      fctx.fillStyle = '#f6f2e6';
+      fctx.beginPath();
+      fctx.moveTo(-4, -52);
+      fctx.bezierCurveTo(14, -44, 22, -24, 18, -2);
+      fctx.bezierCurveTo(14, 6, -14, 6, -18, -2);
+      fctx.bezierCurveTo(-24, -26, -12, -46, -4, -52);
+      fctx.closePath();
+      fctx.fill();
+      fctx.fillStyle = 'rgba(246,242,230,0.9)';
+      fctx.beginPath();
+      fctx.ellipse(-38, 12, 17, 18, 0.2, 0, Math.PI * 2);
+      fctx.fill();
+      fctx.beginPath();
+      fctx.ellipse(38, 12, 17, 18, -0.2, 0, Math.PI * 2);
+      fctx.fill();
+
+      // Augen: groß, dunkel, mit Glanz – blinzeln zufällig
+      const blinking = t > blinkAt && t < blinkAt + 9;
+      if (blinking) blinkAt = t + 50 + Math.random() * 130;
+      for (const ex of [-22, 22]) {
+        fctx.fillStyle = 'rgba(60,30,8,0.16)';
+        fctx.beginPath();
+        fctx.ellipse(ex, -12, 14, 12, 0, 0, Math.PI * 2);
+        fctx.fill();
+        if (blinking) {
+          fctx.strokeStyle = '#2b1505';
+          fctx.lineWidth = 3.5;
+          fctx.beginPath();
+          fctx.moveTo(ex - 10, -12);
+          fctx.quadraticCurveTo(ex, -8, ex + 10, -12);
+          fctx.stroke();
+        } else {
+          fctx.fillStyle = '#1d1208';
+          fctx.beginPath();
+          fctx.ellipse(ex, -13, 10.5, 11.5, 0, 0, Math.PI * 2);
+          fctx.fill();
+          fctx.fillStyle = 'rgba(255,255,255,0.95)';
+          fctx.beginPath();
+          fctx.ellipse(ex - 3.5 + Math.sin(t * 0.8 + ex) * 1.4, -17.5, 3.6, 2.8, -0.5, 0, Math.PI * 2);
+          fctx.fill();
+          fctx.fillStyle = 'rgba(255,255,255,0.45)';
+          fctx.beginPath();
+          fctx.ellipse(ex + 3, -8.5, 2, 1.5, 0, 0, Math.PI * 2);
+          fctx.fill();
+        }
+        if (faceMood === 'angry') {
+          fctx.strokeStyle = 'rgba(42,20,4,0.95)';
+          fctx.lineWidth = 6;
+          fctx.lineCap = 'round';
+          fctx.beginPath();
+          fctx.moveTo(ex < 0 ? ex - 15 : ex + 15, -32);
+          fctx.lineTo(ex < 0 ? ex + 10 : ex - 10, -25);
+          fctx.stroke();
+        } else if (faceMood === 'start') {
+          fctx.strokeStyle = 'rgba(42,20,4,0.9)';
+          fctx.lineWidth = 4.5;
+          fctx.lineCap = 'round';
+          fctx.beginPath();
+          fctx.moveTo(ex - 12, -26);
+          fctx.quadraticCurveTo(ex, -31, ex + 12, -26);
+          fctx.stroke();
+        }
+      }
+      if (faceMood === 'proud') {
+        fctx.fillStyle = '#FFD700';
+        for (const ex of [-22, 22]) {
+          fctx.save();
+          fctx.translate(ex, -13);
+          fctx.rotate(t * 0.12);
+          star(0, 0, 5, 8.5, 3.6);
+          fctx.restore();
+        }
+      }
+
+      // Schnauze: helle Pony-Schnauze (ruht auf dem Kiefer-Teil)
+      fctx.fillStyle = '#e8ddc4';
+      fctx.beginPath();
+      fctx.ellipse(0, 26, 30, 17, 0, 0, Math.PI * 2);
+      fctx.fill();
+      fctx.fillStyle = '#d3c5a5';
+      fctx.beginPath();
+      fctx.ellipse(0, 31, 19, 9, 0, 0, Math.PI * 2);
+      fctx.fill();
+      // Nüstern
+      fctx.fillStyle = '#4a3a2c';
+      fctx.beginPath();
+      fctx.ellipse(-10, 25, 4, 6.5, 0.4, 0, Math.PI * 2);
+      fctx.ellipse(10, 25, 4, 6.5, -0.4, 0, Math.PI * 2);
+      fctx.fill();
+
+      // ==== UNTERKIEFER (2. Teil): rotiert am Kiefergelenk ====
+      const chewA =
+        faceMood === 'angry' ? Math.abs(Math.sin(t * 0.3)) * 0.2 :  // knirscht
+        faceMood === 'proud' ? Math.abs(Math.sin(t * 0.2)) * 0.1 :  // grinst
+        Math.abs(Math.sin(t * 0.18)) * 0.26;                       // kaut
+      fctx.save();
+      fctx.translate(0, 34);
+      fctx.rotate(chewA);
+      fctx.fillStyle = '#e8ddc4';
+      fctx.beginPath();
+      fctx.moveTo(-28, -4);
+      fctx.quadraticCurveTo(0, 14, 28, -4);
+      fctx.quadraticCurveTo(14, 18, 0, 18);
+      fctx.quadraticCurveTo(-14, 18, -28, -4);
+      fctx.closePath();
+      fctx.fill();
+      // Unterlippe
+      fctx.fillStyle = '#d8caad';
+      fctx.beginPath();
+      fctx.ellipse(0, 8, 16, 5, 0, 0, Math.PI * 2);
+      fctx.fill();
+      // Untere Schneidezähne (der Beißer!)
+      fctx.fillStyle = '#f8f5ec';
+      fctx.beginPath();
+      fctx.moveTo(-14, -3);
+      fctx.lineTo(14, -3);
+      fctx.lineTo(11, 5);
+      fctx.lineTo(-11, 5);
+      fctx.closePath();
+      fctx.fill();
+      fctx.strokeStyle = '#cfc7b4';
+      fctx.lineWidth = 1;
+      for (let th = -9; th <= 9; th += 6) {
+        fctx.beginPath();
+        fctx.moveTo(th, -3);
+        fctx.lineTo(th, 4);
+        fctx.stroke();
+      }
+      fctx.restore();
+
+      fctx.restore();
+      faceAnim = requestAnimationFrame(draw);
+    }
+
+    function star(cx, cy, spikes, outer, inner) {
+      let rot = (Math.PI / 2) * 3;
+      let stepA = Math.PI / spikes;
+      fctx.beginPath();
+      fctx.moveTo(cx, cy - outer);
+      for (let i = 0; i < spikes; i++) {
+        fctx.lineTo(cx + Math.cos(rot) * outer, cy + Math.sin(rot) * outer);
+        rot += stepA;
+        fctx.lineTo(cx + Math.cos(rot) * inner, cy + Math.sin(rot) * inner);
+        rot += stepA;
+      }
+      fctx.lineTo(cx, cy - outer);
+      fctx.closePath();
+      fctx.fill();
+    }
+
+    draw();
+  }
+
+  startBtn.addEventListener('click', () => {
+    if (levelUpPending) {
+      levelUpPending = false;
+      level++;
+      isRunning = true;
+      overlay.style.display = 'none';
+      planQuotes();
+      lastFrameTime = 0;
+      frameAccum = 0;
+      if (faceAnim) { cancelAnimationFrame(faceAnim); faceAnim = null; }
+      requestAnimationFrame(gameLoop);
+    } else {
+      startGame();
+    }
+  });
+
+  // Mucki grinst schon auf dem Startbildschirm
+  startFaceAnim('start');
+
+  function gameLoop(timestamp) {
+    if (!isRunning) return;
+
+    // Delta-Zeit: Spiellogik läuft immer mit 60 FPS, egal wie schnell der PC ist
+    if (!lastFrameTime) lastFrameTime = timestamp;
+    frameAccum += timestamp - lastFrameTime;
+    lastFrameTime = timestamp;
+    if (frameAccum < FRAME_MS) {
+      requestAnimationFrame(gameLoop);
+      return;
+    }
+    frameAccum = Math.min(frameAccum - FRAME_MS, FRAME_MS * 3);
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // ==== HINTERGRUND (Parallax über mehrere Ebenen) ====
+    // Himmel je nach Tageszeit des Levels
+    const skyTones = [
+      ['#87CEEB', '#E0F6FF'], // Tag
+      ['#FFB347', '#FFDDA0'], // Abendrot
+      ['#2C3E70', '#7FA8D9'], // Abenddämmerung
+      ['#0B1035', '#2A3A6E'], // Nacht
+      ['#FF9EC4', '#FFE3F0']  // Morgenrot
+    ];
+    const sky = skyTones[(level - 1) % skyTones.length];
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, baseGroundY + 40);
+    skyGrad.addColorStop(0, sky[0]);
+    skyGrad.addColorStop(1, sky[1]);
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, canvas.width, baseGroundY + 40);
+
+    const bgShift = (level - 1) % 4; // Deko wechselt je Level
+    const scrollSlow = distance * 0.6;
+    const scrollFast = distance * 1.2;
+
+    // Sonne / Mond
+    if (bgShift === 2 || bgShift === 3) {
+      ctx.fillStyle = '#F4F1DE';
+      ctx.beginPath();
+      ctx.arc(300, 80, 22, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(244,241,222,0.25)';
+      ctx.beginPath();
+      ctx.arc(300, 80, 32, 0, Math.PI * 2);
+      ctx.fill();
+      // Sterne
+      ctx.fillStyle = '#fff';
+      for (let s = 0; s < 25; s++) {
+        const sx = (s * 97 + 31) % 360;
+        const sy = (s * 53) % 200;
+        const tw = (Math.sin(runFrame * 0.05 + s) + 1) * 0.9;
+        ctx.globalAlpha = 0.4 + tw * 0.5;
+        ctx.fillRect(sx, sy, 2, 2);
+      }
+      ctx.globalAlpha = 1;
+    } else {
+      ctx.fillStyle = '#FFD93D';
+      ctx.beginPath();
+      ctx.arc(296, 74, 24, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,217,61,0.5)';
+      ctx.lineWidth = 8;
+      // Sonnenstrahlen
+      for (let r = 0; r < 8; r++) {
+        const a = runFrame * 0.01 + (r * Math.PI) / 4;
+        ctx.beginPath();
+        ctx.moveTo(296 + Math.cos(a) * 30, 74 + Math.sin(a) * 30);
+        ctx.lineTo(296 + Math.cos(a) * 38, 74 + Math.sin(a) * 38);
+        ctx.stroke();
+      }
+    }
+
+    // Wolken (langsame Parallax-Ebene)
+    ctx.fillStyle = bgShift === 2 || bgShift === 3 ? 'rgba(200,210,235,0.35)' : 'rgba(255,255,255,0.85)';
+    for (let c = 0; c < 4; c++) {
+      const cx = ((c * 130 - scrollSlow * 0.5) % 460 + 460) % 460 - 50;
+      const cy = 50 + ((c * 37) % 70);
+      const cs = 0.7 + ((c * 13) % 30) / 30;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, 30 * cs, 14 * cs, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx + 22 * cs, cy + 4, 22 * cs, 11 * cs, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx - 20 * cs, cy + 5, 18 * cs, 10 * cs, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Bergketten (weiche, geschlossene Silhouetten, langsam scrollend)
+    function mountainRidge(offset, amp, base, color, speedMul) {
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(0, baseGroundY + 10);
+      for (let x = 0; x <= 360; x += 6) {
+        const wx = x + scrollSlow * speedMul + offset;
+        const y = base - (
+          Math.sin(wx * 0.011) * amp * 0.6 +
+          Math.sin(wx * 0.027 + 1.7) * amp * 0.4 +
+          Math.sin(wx * 0.005 + 4) * amp * 0.5
+        );
+        ctx.lineTo(x, y);
+      }
+      ctx.lineTo(360, baseGroundY + 10);
+      ctx.closePath();
+      ctx.fill();
+    }
+    const mountainColors = [['#9FBF8A', '#7FB98A'], ['#C4A9CE', '#A78BC0'], ['#7C89A6', '#5C6B8A'], ['#5A668F', '#3E4A6B'], ['#D9A8BC', '#C989A6']][bgShift];
+    mountainRidge(500, 46, baseGroundY - 34, mountainColors[0], 0.35);
+    mountainRidge(0, 34, baseGroundY - 18, mountainColors[1], 0.6);
+
+    // Deko-Hintergrund (wechselt je Level): Bäume, Zäune, Windräder, Pilze, Kaktus-Parodie
+    function drawTree(tx, ty, s) {
+      ctx.fillStyle = '#6b4423';
+      ctx.fillRect(tx + 8 * s, ty - 22 * s, 5 * s, 22 * s);
+      ctx.fillStyle = ['#2e8b3d', '#3fae4f', '#1d6b2e'][Math.floor(s * 3) % 3];
+      ctx.beginPath();
+      ctx.arc(tx + 10 * s, ty - 30 * s, 14 * s, 0, Math.PI * 2);
+      ctx.arc(tx + 3 * s, ty - 24 * s, 10 * s, 0, Math.PI * 2);
+      ctx.arc(tx + 17 * s, ty - 24 * s, 10 * s, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    function drawFence(fx, fy) {
+      ctx.fillStyle = '#8B7355';
+      ctx.fillRect(fx, fy - 18, 4, 18);
+      ctx.fillRect(fx + 30, fy - 18, 4, 18);
+      ctx.fillRect(fx + 60, fy - 18, 4, 18);
+      ctx.fillRect(fx - 2, fy - 14, 68, 4);
+      ctx.fillRect(fx - 2, fy - 8, 68, 4);
+    }
+    function drawWindmill(wx, wy) {
+      ctx.fillStyle = '#d9d4c5';
+      ctx.fillRect(wx + 9, wy - 40, 8, 40);
+      ctx.save();
+      ctx.translate(wx + 13, wy - 42);
+      ctx.rotate(runFrame * 0.05);
+      ctx.strokeStyle = '#f5f0e6';
+      ctx.lineWidth = 3;
+      for (let b = 0; b < 3; b++) {
+        ctx.rotate((Math.PI * 2) / 3);
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(16, 0);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+    function drawMushroom(mx, my) {
+      ctx.fillStyle = '#f0e8d8';
+      ctx.fillRect(mx, my - 10, 5, 10);
+      ctx.fillStyle = '#d9534f';
+      ctx.beginPath();
+      ctx.arc(mx + 2, my - 10, 7, Math.PI, 0);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(mx, my - 13, 1.5, 0, Math.PI * 2);
+      ctx.arc(mx + 4, my - 12, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    function drawFlower(fx, fy, variant) {
+      const petals = ['#FF6B8A', '#FFD93D', '#B39DDB', '#FF8C42'][variant % 4];
+      ctx.strokeStyle = '#2e8b3d';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(fx + 3, fy);
+      ctx.lineTo(fx + 3, fy - 8);
+      ctx.stroke();
+      ctx.fillStyle = petals;
+      for (let p = 0; p < 4; p++) {
+        ctx.beginPath();
+        ctx.arc(fx + 3 + Math.cos((p * Math.PI) / 2) * 4, fy - 11 + Math.sin((p * Math.PI) / 2) * 4, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(fx + 3, fy - 11, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Schnelle Parallax-Deko vorne (am Boden)
+    for (let d = 0; d < 5; d++) {
+      const dxRaw = ((d * 110 - scrollFast) % 550 + 550) % 550 - 100;
+      const dx = dxRaw;
+      const dy = baseGroundY + 40;
+      const kind = (d + bgShift * 7) % 6;
+      if (kind === 0) drawTree(dx, dy, 1);
+      else if (kind === 1) drawFence(dx, dy);
+      else if (kind === 2) drawWindmill(dx, dy);
+      else if (kind === 3) { drawTree(dx + 30, dy, 0.6); drawMushroom(dx + 70, dy); }
+      else if (kind === 4) { drawFlower(dx, dy, d); drawFlower(dx + 20, dy - 2, d + 1); drawMushroom(dx + 44, dy); }
+      else { drawFence(dx, dy); drawFlower(dx + 72, dy, d + 2); }
+    }
+
+    distance += speed * 0.05;
+    distVal.innerText = Math.floor(distance);
+    scoreVal.innerText = score;
+
+    // Kurzer Sprint / kurzes Bremsen, danach zurück auf Normaltempo
+    if (aggroTimer > 0) {
+      // Aggro: Mucki rast – schneller & unverwundbar
+      speed = 7;
+    } else if (boostTimer > 0) {
+      boostTimer--;
+      speed = 8;
+    } else if (brakeTimer > 0) {
+      brakeTimer--;
+      speed = 2.5;
+    } else {
+      speed = 4;
+    }
+
+    // Sprüche: 3 zufällige Trigger pro 1000-m-Abschnitt
+    if (quoteTriggers.length && distance >= quoteTriggers[0]) {
+      quoteTriggers.shift();
+      currentQuote = muckiQuotes[Math.floor(Math.random() * muckiQuotes.length)];
+      quoteTimer = 220; // ~3,5 s
+    }
+    if (quoteTimer > 0) quoteTimer--;
+
+    // Aggro-Modus: Timer + Effekte
+    if (aggroTimer > 0) aggroTimer--;
+    if (aggroFlash > 0) aggroFlash--;
+
+    // Level-Up alle 500 m
+    if (distance >= level * 500) {
+      // Hindernisse & Items räumen, damit Mucki ins neue Level sauber startet
+      obstacles = [];
+      collectibles = [];
+      levelUp();
+      return;
+    }
+
+    // Physik Pony
+    if (pony.isJumping) {
+      pony.velocityY += pony.gravity;
+      pony.y += pony.velocityY;
+      if (pony.y >= baseGroundY) {
+        pony.y = baseGroundY;
+        pony.isJumping = false;
+      }
+    }
+
+    if (pony.isDucking) {
+      pony.duckTimer--;
+      if (pony.duckTimer <= 0) {
+        pony.isDucking = false;
+      }
+    }
+
+    // Hindernisse & Items spawnen (mehr Abwechslung, duck-bar vs. spring-bar)
+    spawnTimer++;
+    const spawnEvery = Math.max(45, 70 - level * 3);
+    if (spawnTimer > spawnEvery) {
+      spawnTimer = 0;
+      let rand = Math.random();
+      if (rand < 0.25) {
+        // Hürde (springen) – ab Level 2 auch mal breiter
+        const wide = level >= 2 && Math.random() > 0.5;
+        obstacles.push({ x: 380, y: baseGroundY + 8, w: wide ? 34 : 22, h: 26, type: 'hurdle' });
+      } else if (rand < 0.42) {
+        // Busch am Boden: klar unten platziert – SPRINGEN! (Ducken nützt nichts)
+        obstacles.push({ x: 380, y: baseGroundY + 6, w: 34, h: 28, type: 'bush' });
+      } else if (rand < 0.52) {
+        // Schenkel-Pass-Stange: Ducken ist PFLICHT (Springen unmöglich)
+        obstacles.push({ x: 380, y: baseGroundY - 110, w: 44, h: 116, type: 'limbo' });
+      } else if (rand < 0.62) {
+        // Tieffliegender Bienenschwarm: Springen ist PFLICHT
+        obstacles.push({ x: 380, y: baseGroundY + 4, w: 36, h: 28, type: 'bees' });
+      } else if (rand < 0.72) {
+        // Nochmal eine Schenkel-Pass-Stange (Ducken) – zweites Vorkommen
+        obstacles.push({ x: 380, y: baseGroundY - 110, w: 44, h: 116, type: 'limbo' });
+      } else if (rand < 0.9) {
+        // Strohballen (springen) – ab Level 3 manchmal hoch gestapelt
+        const stack = level >= 3 && Math.random() > 0.6;
+        obstacles.push({ x: 380, y: stack ? baseGroundY - 24 : baseGroundY + 4, w: 38, h: stack ? 56 : 28, type: 'hay' });
+      } else if (rand < 0.96 && level >= 2) {
+        // Doppel-Hürde: Sprung-Timing!
+        obstacles.push({ x: 380, y: baseGroundY + 8, w: 22, h: 26, type: 'hurdle' });
+        obstacles.push({ x: 430, y: baseGroundY + 8, w: 22, h: 26, type: 'hurdle' });
+      } else {
+        // Sammelobjekte: ganze Ketten von Äpfeln & Karotten
+        const chainType = Math.random() > 0.5 ? '🍎' : '🥕';
+        const chainLen = 2 + Math.floor(Math.random() * 4); // 2–5 Items
+        const chainY = baseGroundY - (Math.random() > 0.5 ? 10 : 45);
+        for (let cItem = 0; cItem < chainLen; cItem++) {
+          collectibles.push({ x: 380 + cItem * 34, y: chainY, w: 20, h: 20, type: chainType });
+        }
+      }
+    }
+
+    // Boden zeichnen (Gras mit Erdschicht & Parallax-Grasbüschel)
+    ctx.fillStyle = '#4a9e3f';
+    ctx.fillRect(0, baseGroundY + 32, canvas.width, 14);
+    ctx.fillStyle = '#654321';
+    ctx.fillRect(0, baseGroundY + 46, canvas.width, 200);
+    ctx.fillStyle = '#8a5a2b';
+    for (let g = 0; g < 10; g++) {
+      const gx = ((g * 50 - scrollFast) % 500 + 500) % 500 - 70;
+      ctx.fillRect(gx, baseGroundY + 46, 24, 5);
+    }
+    ctx.fillStyle = '#5fb54e';
+    for (let g = 0; g < 9; g++) {
+      const gx = ((g * 55 - scrollFast * 1.1) % 495 + 495) % 495 - 70;
+      ctx.beginPath();
+      ctx.moveTo(gx, baseGroundY + 33);
+      ctx.lineTo(gx + 4, baseGroundY + 24);
+      ctx.lineTo(gx + 8, baseGroundY + 33);
+      ctx.closePath();
+      ctx.fill();
+    }
+    // Unterer Abschluss: dunkler Rand unter dem Erdreich
+    ctx.fillStyle = '#4a3418';
+    ctx.fillRect(0, baseGroundY + 60, canvas.width, canvas.height - baseGroundY - 60);
+
+    // Mini Shetland Pony zeichnen (hellbraunes Fell mit dunkler Mähne)
+    let currentH = pony.isDucking ? 18 : pony.height;
+    let currentY = pony.isDucking ? pony.y + 14 : pony.y;
+
+    runFrame++;
+
+    // AGGRO-OVERLAY: rote Wut-Aura um Mucki + Blitz beim Treffer/Aktivierung
+    if (aggroTimer > 0 || aggroFlash > 0) {
+      const aura = ctx.createRadialGradient(
+        pony.x + pony.width / 2, currentY + currentH / 2, 5,
+        pony.x + pony.width / 2, currentY + currentH / 2, 55
+      );
+      const isHitFlash = aggroTimer <= 0; // nur Blitz, kein Aggro
+      aura.addColorStop(0, isHitFlash ? 'rgba(255,255,255,0.6)' : 'rgba(255,43,31,0.45)');
+      aura.addColorStop(1, 'rgba(255,43,31,0)');
+      ctx.fillStyle = aura;
+      ctx.beginPath();
+      ctx.arc(pony.x + pony.width / 2, currentY + currentH / 2, 55, 0, Math.PI * 2);
+      ctx.fill();
+      // Wut-Zacken überm Kopf
+      if (aggroTimer > 0) {
+        ctx.fillStyle = '#ff2b1f';
+        for (let z = 0; z < 3; z++) {
+          const zx = pony.x + 8 + z * 14;
+          const zs = Math.sin(runFrame * 0.5 + z) * 3;
+          ctx.beginPath();
+          ctx.moveTo(zx - 4, currentY - 24);
+          ctx.lineTo(zx + zs, currentY - 38 - zs);
+          ctx.lineTo(zx + 4, currentY - 24);
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+    }
+
+    // Bein-Zeichnung: Oberschenkel + Huf, rotierend um die Hüfte
+    function drawLeg(lx, hipY, angle) {
+      ctx.save();
+      ctx.translate(lx, hipY);
+      ctx.rotate(angle);
+      ctx.fillStyle = '#96521a';
+      ctx.beginPath();
+      ctx.roundRect(-3, 0, 6, 16, 3);
+      ctx.fill();
+      ctx.fillStyle = '#2b1700';
+      ctx.beginPath();
+      ctx.roundRect(-3.5, 14, 7, 5, 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    const hipY = currentY + currentH - 4;
+    const legSpeed = 0.25 + speed * 0.06;
+
+    if (pony.isDucking) {
+      // Eingeknickte Beine beim Ducken
+      drawLeg(pony.x + 9, hipY, 1.1);
+      drawLeg(pony.x + 31, hipY, 1.1);
+    } else if (pony.isJumping) {
+      // Galopp in der Luft: Vorderbeine angezogen, Hinterbeine gestreckt
+      drawLeg(pony.x + 9, hipY, -0.7);
+      drawLeg(pony.x + 14, hipY, -0.4);
+      drawLeg(pony.x + 28, hipY, 0.8);
+      drawLeg(pony.x + 33, hipY, 0.5);
+    } else {
+      // Lauf-Animation: 4 Beine, phasenversetzt
+      const p = runFrame * legSpeed;
+      drawLeg(pony.x + 8,  hipY, Math.sin(p) * 0.65);
+      drawLeg(pony.x + 13, hipY, Math.sin(p + Math.PI * 0.55) * 0.65);
+      drawLeg(pony.x + 28, hipY, Math.sin(p + Math.PI * 0.8) * 0.65);
+      drawLeg(pony.x + 33, hipY, Math.sin(p + Math.PI * 1.4) * 0.65);
+    }
+
+    // Fliegender Schweif
+    ctx.strokeStyle = '#3b1f0a';
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(pony.x + 3, currentY + 8);
+    ctx.quadraticCurveTo(
+      pony.x - 10,
+      currentY + 10 + Math.sin(runFrame * 0.2) * 5,
+      pony.x - 15,
+      currentY + 22 + Math.cos(runFrame * 0.2) * 4
+    );
+    ctx.stroke();
+
+    // Körper (kompakt & stämmig)
+    ctx.fillStyle = '#b5651d';
+    ctx.beginPath();
+    ctx.roundRect(pony.x, currentY, pony.width, currentH, 12);
+    ctx.fill();
+    // Hellerer Bauch
+    ctx.fillStyle = '#cf8040';
+    ctx.beginPath();
+    ctx.roundRect(pony.x + 8, currentY + currentH - 11, pony.width - 16, 7, 4);
+    ctx.fill();
+
+    if (pony.isDucking) {
+      // Kopf tief beim Ducken
+      ctx.fillStyle = '#b5651d';
+      ctx.beginPath();
+      ctx.roundRect(pony.x + 30, currentY + 2, 16, 11, 5);
+      ctx.fill();
+      ctx.fillStyle = '#a05516';
+      ctx.beginPath();
+      ctx.roundRect(pony.x + 43, currentY + 5, 8, 8, 4);
+      ctx.fill();
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.arc(pony.x + 36, currentY + 6, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#3b1f0a';
+      ctx.fillRect(pony.x + 28, currentY - 2, 12, 5); // Mähne
+    } else {
+      // South-Park-Kopf: bobbt, kippt und flappt beim Reden mit dem Maul
+      const bob = Math.sin(runFrame * 0.35) * 3;
+      const tilt = Math.sin(runFrame * 0.35) * 0.12;
+      const mouthOpen = quoteTimer > 0 ? 2 + Math.abs(Math.sin(runFrame * 0.5)) * 5 : 0;
+
+      // Hals (schräg nach vorne oben)
+      ctx.fillStyle = '#b5651d';
+      ctx.beginPath();
+      ctx.moveTo(pony.x + 25, currentY + 6);
+      ctx.lineTo(pony.x + 38, currentY - 12 + bob);
+      ctx.lineTo(pony.x + 46, currentY - 7 + bob);
+      ctx.lineTo(pony.x + 33, currentY + 14);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.save();
+      ctx.translate(pony.x + 42, currentY - 12 + bob);
+      ctx.rotate(tilt);
+
+      // Kopf
+      ctx.fillStyle = '#b5651d';
+      ctx.beginPath();
+      ctx.roundRect(-6, -8, 17, 12, 5);
+      ctx.fill();
+      // Schnauze
+      ctx.fillStyle = '#a05516';
+      ctx.beginPath();
+      ctx.roundRect(7, -5, 8, 9, 4);
+      ctx.fill();
+      // Auge
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.arc(0, -4, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+      // Maul: flattert beim Reden (South-Park-Style), sonst zorniges Lächeln
+      ctx.strokeStyle = '#5c2e0b';
+      ctx.fillStyle = '#3a1c05';
+      ctx.lineWidth = 1.5;
+      if (mouthOpen > 0) {
+        ctx.beginPath();
+        ctx.ellipse(10, 3, 3.5, mouthOpen, 0, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.beginPath();
+        ctx.arc(10, 1, 2.5, 0.3, Math.PI - 0.3);
+        ctx.stroke();
+      }
+      // Ohr
+      ctx.fillStyle = '#b5651d';
+      ctx.beginPath();
+      ctx.moveTo(-6, -7);
+      ctx.lineTo(-3, -16);
+      ctx.lineTo(1, -7);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+
+      // Mähne (Halskamm) wedelt mit
+      ctx.fillStyle = '#3b1f0a';
+      ctx.beginPath();
+      ctx.moveTo(pony.x + 24, currentY + 4);
+      ctx.quadraticCurveTo(pony.x + 34, currentY - 8 + bob, pony.x + 37, currentY - 19 + bob);
+      ctx.lineTo(pony.x + 41, currentY - 16 + bob);
+      ctx.quadraticCurveTo(pony.x + 35, currentY - 6, pony.x + 31, currentY + 6);
+      ctx.closePath();
+      ctx.fill();
+      // Stirnfransen
+      ctx.beginPath();
+      ctx.moveTo(pony.x + 51, currentY - 17 + bob);
+      ctx.quadraticCurveTo(pony.x + 46, currentY - 21 + bob, pony.x + 41, currentY - 16 + bob);
+      ctx.lineTo(pony.x + 43, currentY - 12 + bob);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Muckis Sprechblase (groß, bis zu 2 Zeilen)
+    if (quoteTimer > 0 && currentQuote) {
+      const alpha = quoteTimer < 30 ? quoteTimer / 30 : 1;
+      ctx.font = 'bold 13px sans-serif';
+      const words = currentQuote.split(' ');
+      const lines = [];
+      let line = '';
+      for (const w of words) {
+        const test = line ? line + ' ' + w : w;
+        if (ctx.measureText(test).width > 250 && line) {
+          lines.push(line);
+          line = w;
+        } else {
+          line = test;
+        }
+      }
+      lines.push(line);
+      const shown = lines.slice(0, 2);
+      if (lines.length > 2) shown[1] += '…';
+      const bw = Math.max(...shown.map((l) => ctx.measureText(l).width)) + 20;
+      const bh = shown.length * 18 + 14;
+      const bx = Math.max(6, Math.min(pony.x - 10, 360 - bw - 6));
+      const by = Math.max(34, currentY - 46 - bh);
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = '#fff';
+      ctx.strokeStyle = '#2d1a0e';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(bx, by, bw, bh, 12);
+      ctx.fill();
+      ctx.stroke();
+      // Sprechblasen-Zeiger
+      ctx.beginPath();
+      ctx.moveTo(pony.x + 14, by + bh - 2);
+      ctx.lineTo(pony.x + 26, by + bh - 2);
+      ctx.lineTo(pony.x + 20, by + bh + 12);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#2d1a0e';
+      ctx.textBaseline = 'middle';
+      shown.forEach((l, i) => ctx.fillText(l, bx + 10, by + 16 + i * 18));
+      ctx.globalAlpha = 1;
+      ctx.textBaseline = 'alphabetic';
+    }
+
+    // Hindernisse bewegen & prüfen
+    for (let i = obstacles.length - 1; i >= 0; i--) {
+      let obs = obstacles[i];
+      obs.x -= speed;
+
+      if (obs.type === 'hurdle') {
+        const hx = obs.x, hy = obs.y, hw = obs.w, hh = obs.h;
+        // Schatten am Boden
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        ctx.beginPath();
+        ctx.ellipse(hx + hw / 2, hy + hh + 2, hw / 2 + 3, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // Pfosten
+        ctx.fillStyle = '#6b4423';
+        ctx.fillRect(hx, hy + 4, 4, hh - 4);
+        ctx.fillRect(hx + hw - 4, hy + 4, 4, hh - 4);
+        // Roter Querbalken
+        ctx.fillStyle = '#d9534f';
+        ctx.beginPath();
+        ctx.roundRect(hx - 3, hy + 6, hw + 6, 8, 3);
+        ctx.fill();
+        ctx.fillStyle = '#b93832';
+        ctx.fillRect(hx - 3, hy + 11, hw + 6, 3);
+        // Weiße Latte
+        ctx.fillStyle = '#f5f0e6';
+        ctx.beginPath();
+        ctx.roundRect(hx - 2, hy + 18, hw + 4, 6, 3);
+        ctx.fill();
+        // Stolper-Füße am Boden
+        ctx.fillStyle = '#6b4423';
+        ctx.fillRect(hx - 2, hy + hh - 5, 8, 5);
+        ctx.fillRect(hx + hw - 6, hy + hh - 5, 8, 5);
+      } else if (obs.type === 'limbo') {
+        // Schenkel-Pass-Stange: Pfosten + hoher Balken mit Ab-Signal – DUCKEN!
+        const lx = obs.x, ly = obs.y, lw = obs.w, lh = obs.h;
+        // Pfosten links & rechts (vom Boden bis ganz nach oben)
+        ctx.fillStyle = '#6b4423';
+        ctx.fillRect(lx, ly, 7, lh + 32);
+        ctx.fillRect(lx + lw - 7, ly, 7, lh + 32);
+        ctx.fillStyle = '#8a5a2b';
+        ctx.fillRect(lx + 1, ly, 2, lh + 32);
+        ctx.fillRect(lx + lw - 6, ly, 2, lh + 32);
+        // Hohe Wand zwischen den Pfosten (füllt den Raum über dem Balken):
+        // Signalisiert klar: HIER KOMMST DU NICHT DRÜBER – nur unten durch!
+        const wallGrad = ctx.createLinearGradient(0, ly, 0, ly + lh - 24);
+        wallGrad.addColorStop(0, 'rgba(140,90,40,0.95)');
+        wallGrad.addColorStop(1, 'rgba(110,70,30,0.95)');
+        ctx.fillStyle = wallGrad;
+        ctx.beginPath();
+        ctx.roundRect(lx + 7, ly - 4, lw - 14, lh - 20, 4);
+        ctx.fill();
+        // Diagonale Warnschraffur auf der Wand (Baustellen-Stil: "gesperrt")
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(lx + 7, ly - 4, lw - 14, lh - 20);
+        ctx.clip();
+        ctx.strokeStyle = 'rgba(255,217,61,0.55)';
+        ctx.lineWidth = 5;
+        for (let sx = -lh; sx < lw + lh; sx += 14) {
+          ctx.beginPath();
+          ctx.moveTo(lx + sx, ly - 8);
+          ctx.lineTo(lx + sx - lh, ly + lh - 20);
+          ctx.stroke();
+        }
+        ctx.restore();
+        // Gestreifter Balken unten (Kollisions-Unterkante)
+        ctx.fillStyle = '#d9534f';
+        ctx.beginPath();
+        ctx.roundRect(lx - 2, ly + lh - 24, lw + 4, 14, 4);
+        ctx.fill();
+        ctx.fillStyle = '#f5f0e6';
+        ctx.fillRect(lx + 6, ly + lh - 21, 7, 8);
+        ctx.fillRect(lx + lw - 13, ly + lh - 21, 7, 8);
+        ctx.fillRect(lx + lw / 2 - 3, ly + lh - 21, 6, 8);
+        // Dickes AB-Pfeil-Schild UNTER dem Balken: zeigt klar nach UNTEN
+        const ay = ly + lh - 8;
+        ctx.fillStyle = '#FFD700';
+        ctx.strokeStyle = '#2d1a0e';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(lx + lw / 2, ay + 20);
+        ctx.lineTo(lx + lw / 2 - 15, ay);
+        ctx.lineTo(lx + lw / 2 - 5, ay);
+        ctx.lineTo(lx + lw / 2 - 5, ay - 10);
+        ctx.lineTo(lx + lw / 2 + 5, ay - 10);
+        ctx.lineTo(lx + lw / 2 + 5, ay);
+        ctx.lineTo(lx + lw / 2 + 15, ay);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        // Rote Warncante: exakte Kollisions-Unterkante
+        ctx.strokeStyle = 'rgba(217,83,79,0.9)';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([8, 6]);
+        ctx.beginPath();
+        ctx.moveTo(lx - 2, ly + lh);
+        ctx.lineTo(lx + lw + 2, ly + lh);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      } else if (obs.type === 'bees') {
+        // Bienenschwarm: wabernde Bienen mit Flügeln – Springen!
+        const bx2 = obs.x, by2 = obs.y, bw2 = obs.w, bh2 = obs.h;
+        ctx.fillStyle = '#F5D76E';
+        ctx.strokeStyle = '#2b1a00';
+        ctx.lineWidth = 1.5;
+        for (let b = 0; b < 7; b++) {
+          const bxp = bx2 + (b * 47 % bw2) + Math.sin(runFrame * 0.15 + b * 2.1) * 7;
+          const byp = by2 + ((b * 29) % bh2) + Math.cos(runFrame * 0.19 + b * 1.7) * 6;
+          // Körper
+          ctx.beginPath();
+          ctx.ellipse(bxp, byp, 6, 4.5, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          // Streifen
+          ctx.fillStyle = '#2b1a00';
+          ctx.beginPath();
+          ctx.ellipse(bxp - 1, byp, 1.4, 4.2, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#F5D76E';
+          // Flügel (flattern)
+          const flap = Math.sin(runFrame * 0.9 + b) * 0.6;
+          ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.ellipse(bxp - 2, byp - 5, 4, 2.2, flap, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.strokeStyle = '#2b1a00';
+        }
+        // Warncante
+        ctx.strokeStyle = 'rgba(217,83,79,0.9)';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([8, 6]);
+        ctx.beginPath();
+        ctx.moveTo(bx2, by2 + bh2);
+        ctx.lineTo(bx2 + bw2, by2 + bh2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      } else if (obs.type === 'bush') {
+        // Busch am Boden: steht klar auf dem Boden – über ihn springen!
+        const ux = obs.x, uy = obs.y, uw = obs.w, uh = obs.h;
+        // Bodenschatten
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        ctx.beginPath();
+        ctx.ellipse(ux + uw / 2, uy + uh + 1, uw / 2 + 2, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // Dichte Blätterkugeln
+        ctx.fillStyle = '#1d6b2e';
+        ctx.beginPath();
+        ctx.ellipse(ux + 10, uy + 14, 14, 13, 0, 0, Math.PI * 2);
+        ctx.ellipse(ux + uw - 10, uy + 14, 14, 13, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#2e8b3d';
+        ctx.beginPath();
+        ctx.ellipse(ux + uw / 2, uy + 10, 16, 14, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#3fae4f';
+        ctx.beginPath();
+        ctx.ellipse(ux + uw / 2 - 4, uy + 5, 8, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // Beeren-Punkte
+        ctx.fillStyle = '#d9534f';
+        ctx.beginPath();
+        ctx.arc(ux + 8, uy + 8, 2, 0, Math.PI * 2);
+        ctx.arc(ux + uw - 12, uy + 12, 2, 0, Math.PI * 2);
+        ctx.arc(ux + uw / 2 + 4, uy + 16, 2, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (obs.type === 'hay') {
+        // Strohballen: golden, gestrichelt, mit Bindfaden
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        ctx.beginPath();
+        ctx.ellipse(obs.x + obs.w / 2, obs.y + obs.h + 2, obs.w / 2 + 2, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#d9a940';
+        ctx.beginPath();
+        ctx.roundRect(obs.x, obs.y, obs.w, obs.h, 8);
+        ctx.fill();
+        ctx.strokeStyle = '#b8892e';
+        ctx.lineWidth = 1.5;
+        for (let s = 5; s < obs.h - 3; s += 7) {
+          ctx.beginPath();
+          ctx.moveTo(obs.x + 3, obs.y + s);
+          ctx.lineTo(obs.x + obs.w - 3, obs.y + s);
+          ctx.stroke();
+        }
+        ctx.strokeStyle = '#8a6a1e';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(obs.x + obs.w / 2, obs.y + 1);
+        ctx.lineTo(obs.x + obs.w / 2, obs.y + obs.h - 1);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(obs.x + obs.w / 2 + 7, obs.y + obs.h / 2, 5, 0, Math.PI * 2);
+        ctx.stroke();
+      } else {
+        // Ast hängt von OBEN herein: kompakter Balken = exakt die Kollisionsfläche
+        const bx = obs.x, by = obs.y, bw = obs.w, bh = obs.h;
+        // Kleine Baumkrone oben am Bildschirmrand
+        ctx.fillStyle = '#2e8b3d';
+        ctx.beginPath();
+        ctx.ellipse(bx + bw / 2, -6, 18, 11, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#3fae4f';
+        ctx.beginPath();
+        ctx.ellipse(bx + bw / 2, -10, 12, 7, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // Dünner Ast (vertikal, füllt die Hitbox) – schmaler als die Box
+        const grad = ctx.createLinearGradient(bx, 0, bx + bw, 0);
+        grad.addColorStop(0, '#5c3a1a');
+        grad.addColorStop(0.5, '#8a5a2b');
+        grad.addColorStop(1, '#5c3a1a');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.roundRect(bx + bw / 2 - 6, by - 6, 12, bh + 6, 5);
+        ctx.fill();
+        // Holzmaserung
+        ctx.strokeStyle = 'rgba(60,35,12,0.5)';
+        ctx.lineWidth = 1;
+        for (let gy = by + 5; gy < by + bh - 4; gy += 8) {
+          ctx.beginPath();
+          ctx.moveTo(bx + bw / 2 - 4, gy);
+          ctx.lineTo(bx + bw / 2 + 4, gy + 2);
+          ctx.stroke();
+        }
+        // Kleines Blattbüschel + 2 Beeren am unteren Ende
+        ctx.fillStyle = '#2e8b3d';
+        ctx.beginPath();
+        ctx.ellipse(bx + 3, by + bh - 3, 8, 6, 0.5, 0, Math.PI * 2);
+        ctx.ellipse(bx + bw - 3, by + bh - 3, 8, 6, -0.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#3fae4f';
+        ctx.beginPath();
+        ctx.ellipse(bx + bw / 2, by + bh - 5, 6, 4.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#d9534f';
+        ctx.beginPath();
+        ctx.arc(bx + 2, by + bh - 1, 1.8, 0, Math.PI * 2);
+        ctx.arc(bx + bw - 2, by + bh - 1, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+        // Rote gestrichelte Warncante: exakt die Kollisions-Unterkante
+        ctx.strokeStyle = 'rgba(217,83,79,0.9)';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([8, 6]);
+        ctx.beginPath();
+        ctx.moveTo(bx - 2, by + bh);
+        ctx.lineTo(bx + bw + 2, by + bh);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      if (
+        pony.x < obs.x + obs.w &&
+        pony.x + pony.width > obs.x &&
+        currentY < obs.y + obs.h &&
+        currentY + currentH > obs.y
+      ) {
+        if (aggroTimer > 0) {
+          // AGGRO: Hindernis wird umgerannt! Bonuspunkte & splitternd weg
+          score += 100;
+          obstacles.splice(i, 1);
+          continue;
+        }
+        // Kein Aggro: Leben verlieren
+        lives--;
+        livesBox.innerText = '❤️ ' + lives;
+        if (lives <= 0) {
+          gameOver();
+          return;
+        }
+        // Weiterlaufen: kurze Unverwundbarkeit & Hindernis weg
+        aggroFlash = 40; // Blitz-Effekt als Treffer-Feedback
+        obstacles.splice(i, 1);
+        currentQuote = 'AUA! Aber ich LAUFE WEITER! 😤🦵';
+        quoteTimer = 120;
+        continue;
+      }
+
+      if (obs.x < -40) obstacles.splice(i, 1);
+    }
+
+    // Sammelobjekte bewegen & prüfen
+    for (let i = collectibles.length - 1; i >= 0; i--) {
+      let item = collectibles[i];
+      item.x -= speed;
+
+      ctx.font = '18px sans-serif';
+      ctx.fillText(item.type, item.x, item.y + 15);
+
+      if (
+        pony.x < item.x + item.w &&
+        pony.x + pony.width > item.x &&
+        currentY < item.y + item.h &&
+        currentY + currentH > item.y
+      ) {
+        score += 50;
+        if (item.type === '🍎') {
+          apples++;
+          // 3 Äpfel = 1 Extra-Leben
+          if (apples >= 3) {
+            apples = 0;
+            lives++;
+            livesBox.innerText = '❤️ ' + lives;
+            currentQuote = 'Drei Äpfel? Ich bin jetzt UNSTERBLICH! ... fast. 😤';
+            quoteTimer = 180;
+          }
+        } else if (item.type === '🥕') {
+          carrots++;
+          carrotVal.innerText = carrots;
+          aggroBox.style.display = '';
+          // 5 Karotten = AGGRO-MODUS
+          if (carrots >= 5 && aggroTimer <= 0) {
+            carrots = 0;
+            carrotVal.innerText = 0;
+            aggroTimer = 420; // 7 Sekunden Durchdrehen
+            aggroFlash = 40;
+            currentQuote = 'KAROTTEN-OVERLOAD! ICH DREHE DURCH!!! 🥕🔥🦷';
+            quoteTimer = 220;
+          }
+        }
+        collectibles.splice(i, 1);
+        continue;
+      }
+
+      if (item.x < -40) collectibles.splice(i, 1);
+    }
+
+    requestAnimationFrame(gameLoop);
+  }
+</script>
+</body>
+</html>
